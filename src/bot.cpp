@@ -5,10 +5,8 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
     std::cout << "\033[1;34mLoading model: " << modelPath << "\033[0m\n";
 
     llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers = 7;
     this->model = llama_model_load_from_file(modelPath.c_str(), model_params);
-    //this->model = llama_load_model_from_file(modelPath.c_str(), model_params);
-
-    model_params.n_gpu_layers = 30;
 
     if (model == nullptr)
     {
@@ -17,9 +15,12 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
     }
 
     this->contextParams = new llama_context_params();
-    this->contextParams->n_ctx = 512;
-    this->contextParams->n_threads = 8;
-    this->contextParams->n_batch = 128;
+    this->contextParams->n_ctx = 1024;
+    this->contextParams->n_batch = 1024;
+    this->contextParams->n_threads = 7;
+    this->contextParams->n_threads_batch = this->contextParams->n_threads;
+
+    std::cout << "Number of threads: " << this->contextParams->n_threads << std::endl;
 
     this->context = llama_init_from_model(this->model, *this->contextParams);
 
@@ -112,25 +113,46 @@ std::string bot::getResponse(const std::string& input)
 
     std::string response;
     llama_token new_token_id;
-    while (true) 
+    int max_tokens = 256;
+    int token_count = 0;
+
+    while (token_count < max_tokens)
     {
         new_token_id = llama_sampler_sample(sampler, context, -1);
 
         if (llama_vocab_is_eog(vocab, new_token_id))
         {
+            std::cout << "\n[DEBUG] End of generation token received." << std::endl;
             break;
         }
 
-        char buf[256];
-        int n = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
-        if (n < 0) 
+        if (new_token_id < 0 || new_token_id >= llama_vocab_n_tokens(vocab))  
         {
-            std::cerr << "Failed to convert token to string!" << std::endl;
+            std::cerr << "[ERROR] Invalid token ID: " << new_token_id << std::endl;
             break;
         }
-        
+
+        char buf[256] = {0}; 
+        int n = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
+
+        if (n < 0)  
+        {
+            std::cerr << "[ERROR] Failed to convert token to text!" << std::endl;
+            break;
+        }
+
         std::string piece(buf, n);
+
+        for (char &c : piece)  
+        {
+            if (!isprint(c) && c != '\n' && c != ' ')  
+            {
+                c = ' ';
+            }
+        }
+
         response += piece;
+        token_count++;
     }
 
     return response;
