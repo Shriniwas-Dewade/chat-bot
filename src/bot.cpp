@@ -2,7 +2,7 @@
 
 bot::bot(const std::string& modelPath) : modelPath(modelPath)
 {
-    std::cout << "\033[1;34mLoading model: " << modelPath << "\033[0m\n";
+    animateText("\033[1;34m🔥 Booting up the AI... Loading the Matrix... \033[0m", 30);
 
     llama_log_set([](enum ggml_log_level level, const char * text, void * /* user_data */) {
         if (level >= GGML_LOG_LEVEL_ERROR) {
@@ -18,7 +18,7 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
 
     if (model == nullptr)
     {
-        std::cerr << "\033[1;31mFailed to load model: " << modelPath << "\033[0m\n";
+        animateText("\033[1;31m❌ AI Error: Model loading failed! \033[0m", 40);
         std::exit(1);
     }
 
@@ -26,26 +26,26 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
 
     contextParams = llama_context_default_params();
     contextParams.n_ctx = 4096;
-    contextParams.n_batch = 4096;
+    contextParams.n_batch = 2048;
     contextParams.n_threads = 7;
     contextParams.n_threads_batch = contextParams.n_threads;
-
-    std::cout << "Number of threads: " << contextParams.n_threads << std::endl;
 
     this->context = llama_init_from_model(this->model, contextParams);
 
     if (context == nullptr)
     {
-        std::cerr << "\033[1;31mFailed to create context!\033[0m\n";
+        animateText("\033[1;31m💀 AI Crash: Failed to create context! \033[0m", 40);
         std::exit(1);
     }
 
     this->sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(this->sampler, llama_sampler_init_min_p(0.05f, 1));
     llama_sampler_chain_add(this->sampler, llama_sampler_init_temp(0.8f));
+    llama_sampler_chain_add(this->sampler, llama_sampler_init_top_k(40));
+    llama_sampler_chain_add(this->sampler, llama_sampler_init_top_p(0.95f, 0));
     llama_sampler_chain_add(this->sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
-    std::cout << "\033[1;34mModel loaded successfully!\033[0m\n";
+    animateText("\033[1;34m✅ AI Loaded & Ready to Drop Some Wisdom! 🚀\033[0m", 30);
 }
 
 bot::~bot()
@@ -68,21 +68,58 @@ bot::~bot()
 
 void bot::startChat()
 {
-    std::string input;
-    std::cout << "\033[1;32mChatbot Ready! Type 'exit' to quit.\033[0m\n";
+    std::vector<llama_chat_message> chat_history;
+    std::vector<char> formatted_input(llama_n_ctx(context));
 
-    while (true)
+    std::string system_prompt = "[INST] Yo, wassup? You chattin' with the realest AI out here. \n"
+                                "I keep it 💯 and talk street. No corny, formal talk—just real convos. \n"
+                                "I got bars, I got wisdom, and I got jokes. Let's chop it up! [/INST]";
+    
+    chat_history.push_back({"system", strdup(system_prompt.c_str())});
+
+    int prev_len = 0;
+
+    animateText("\033[1;32m✨ Yo! AI at your service. Type 'exit' to bounce. 🚀\033[0m", 40);
+
+    while(true)
     {
-        printUser("You: ");
+        printUser("😎 You : ");
+        std::string input;
         std::getline(std::cin, input);
 
         if (input == "exit")
         {
+            animateText("\033[1;36m👋 Aight, I'm out! Stay cool. 😎\033[0m", 40);
             break;
         }
 
-        std::string response = getResponse(input);
-        printBot("Bot: " + response);
+        const char * tmpl = llama_model_chat_template(model, nullptr);
+        chat_history.push_back({"user", strdup(input.c_str())});
+
+        int new_len = llama_chat_apply_template(tmpl, chat_history.data(), chat_history.size(), true, formatted_input.data(), formatted_input.size());
+        
+        if (new_len > (int)formatted_input.size()) 
+        {
+            formatted_input.resize(new_len);
+            new_len = llama_chat_apply_template(tmpl, chat_history.data(), chat_history.size(), true, formatted_input.data(), formatted_input.size());
+        }
+        
+        if (new_len < 0) 
+        {
+            std::cerr << "Failed to apply the chat template" << std::endl;
+            continue;
+        }
+        
+        std::string prompt(formatted_input.begin() + prev_len, formatted_input.begin() + new_len);
+        animateText("🤖 Neura : " + getResponse(prompt), 35);
+        
+        chat_history.push_back({"assistant", strdup(prompt.c_str())});
+        prev_len = llama_chat_apply_template(tmpl, chat_history.data(), chat_history.size(), false, nullptr, 0);
+        
+        if (prev_len < 0) 
+        {
+            std::cerr << "Failed to apply the chat template" << std::endl;
+        }
     }
 }
 
@@ -156,4 +193,15 @@ void bot::printUser(const std::string& text)
 void bot::printBot(const std::string& text)
 {
     std::cout << "\033[1;33m" << text << "\033[0m\n";
+}
+
+void bot::animateText(const std::string& text, int delay)
+{
+    for (char c : text)
+    {
+        std::cout << c << std::flush;
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+    }
+
+    std::cout << std::endl;
 }

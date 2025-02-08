@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include "llama.h"
 
 class bot
@@ -27,6 +28,8 @@ public:
 
     static void printUser(const std::string& message);
     static void printBot(const std::string& message);
+
+    void animateText(const std::string& text, int delay = 50);
 };
 
 #endif // BOT_H
