@@ -4,8 +4,16 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
 {
     std::cout << "\033[1;34mLoading model: " << modelPath << "\033[0m\n";
 
+    llama_log_set([](enum ggml_log_level level, const char * text, void * /* user_data */) {
+        if (level >= GGML_LOG_LEVEL_ERROR) {
+            fprintf(stderr, "%s", text);
+        }
+    }, nullptr);
+
+    ggml_backend_load_all();
+
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 7;
+    model_params.n_gpu_layers = 21;
     this->model = llama_model_load_from_file(modelPath.c_str(), model_params);
 
     if (model == nullptr)
@@ -14,15 +22,17 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
         std::exit(1);
     }
 
-    this->contextParams = new llama_context_params();
-    this->contextParams->n_ctx = 1024;
-    this->contextParams->n_batch = 1024;
-    this->contextParams->n_threads = 7;
-    this->contextParams->n_threads_batch = this->contextParams->n_threads;
+    this->vocab = llama_model_get_vocab(this->model);
 
-    std::cout << "Number of threads: " << this->contextParams->n_threads << std::endl;
+    contextParams = llama_context_default_params();
+    contextParams.n_ctx = 4096;
+    contextParams.n_batch = 4096;
+    contextParams.n_threads = 7;
+    contextParams.n_threads_batch = contextParams.n_threads;
 
-    this->context = llama_init_from_model(this->model, *this->contextParams);
+    std::cout << "Number of threads: " << contextParams.n_threads << std::endl;
+
+    this->context = llama_init_from_model(this->model, contextParams);
 
     if (context == nullptr)
     {
@@ -78,15 +88,9 @@ void bot::startChat()
 
 std::string bot::getResponse(const std::string& input) 
 {
-    const llama_vocab *vocab = llama_model_get_vocab(model);
-    if (!vocab) 
-    {
-        std::cerr << "Failed to get vocabulary from model!" << std::endl;
-        return "Error: Could not tokenize input.";
-    }
-
     bool is_first = llama_get_kv_cache_used_cells(context) == 0;
-    int32_t num_tokens = -llama_tokenize(vocab, input.c_str(), input.size(), nullptr, 0, is_first, true);
+
+    const int32_t num_tokens = -llama_tokenize(vocab, input.c_str(), input.size(), nullptr, 0, is_first, true);
     
     if (num_tokens < 0) 
     {
@@ -104,55 +108,40 @@ std::string bot::getResponse(const std::string& input)
 
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
 
-
-    if (llama_decode(context, batch)) 
-    {
-        std::cerr << "Failed to run inference!" << std::endl;
-        return "Error: Model failed to process input.";
-    }
-
     std::string response;
     llama_token new_token_id;
-    int max_tokens = 256;
-    int token_count = 0;
 
-    while (token_count < max_tokens)
+    while (true)
     {
+        int n_ctx = llama_n_ctx(context);
+        int n_ctx_used = llama_get_kv_cache_used_cells(context);
+
+        if (n_ctx_used + batch.n_tokens >= n_ctx)
+        {
+            std::cerr << "Warning: Context full! Shifting memory.\n";
+            return "Error: Context is full.";
+        }
+
+        if(llama_decode(context, batch))
+        {
+            std::cerr << "Failed to decode!" << std::endl;
+            return "Error: Failed to decode.";
+        }
+
         new_token_id = llama_sampler_sample(sampler, context, -1);
 
         if (llama_vocab_is_eog(vocab, new_token_id))
         {
-            std::cout << "\n[DEBUG] End of generation token received." << std::endl;
             break;
         }
 
-        if (new_token_id < 0 || new_token_id >= llama_vocab_n_tokens(vocab))  
-        {
-            std::cerr << "[ERROR] Invalid token ID: " << new_token_id << std::endl;
-            break;
-        }
-
-        char buf[256] = {0}; 
+        char buf[1024];
         int n = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
 
-        if (n < 0)  
-        {
-            std::cerr << "[ERROR] Failed to convert token to text!" << std::endl;
-            break;
-        }
+        std::string text(buf, n);
+        response += text;
 
-        std::string piece(buf, n);
-
-        for (char &c : piece)  
-        {
-            if (!isprint(c) && c != '\n' && c != ' ')  
-            {
-                c = ' ';
-            }
-        }
-
-        response += piece;
-        token_count++;
+        batch = llama_batch_get_one(&new_token_id, 1);
     }
 
     return response;

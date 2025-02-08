@@ -4,7 +4,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <thread>
+#include <cstdio>
+#include <cstring>
 #include "llama.h"
 
 class bot
@@ -12,9 +13,10 @@ class bot
 private:
     std::string modelPath;
     llama_model* model;
-    llama_context_params* contextParams;
+    llama_context_params contextParams;
     llama_context* context;
     llama_sampler* sampler;
+    const llama_vocab* vocab;
 
 public:
     bot(const std::string& modelPath);
