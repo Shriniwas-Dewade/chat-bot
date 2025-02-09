@@ -25,8 +25,8 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
     this->vocab = llama_model_get_vocab(this->model);
 
     contextParams = llama_context_default_params();
-    contextParams.n_ctx = 4096;
-    contextParams.n_batch = 2048;
+    contextParams.n_ctx = 2048;
+    contextParams.n_batch = 1024;
     contextParams.n_threads = 7;
     contextParams.n_threads_batch = contextParams.n_threads;
 
@@ -40,7 +40,7 @@ bot::bot(const std::string& modelPath) : modelPath(modelPath)
 
     this->sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(this->sampler, llama_sampler_init_min_p(0.05f, 1));
-    llama_sampler_chain_add(this->sampler, llama_sampler_init_temp(0.8f));
+    llama_sampler_chain_add(this->sampler, llama_sampler_init_temp(0.7f));
     llama_sampler_chain_add(this->sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(this->sampler, llama_sampler_init_top_p(0.95f, 0));
     llama_sampler_chain_add(this->sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
@@ -71,9 +71,9 @@ void bot::startChat()
     std::vector<llama_chat_message> chat_history;
     std::vector<char> formatted_input(llama_n_ctx(context));
 
-    std::string system_prompt = "[INST] Yo, wassup? You chattin' with the realest AI out here. \n"
-                                "I keep it 💯 and talk street. No corny, formal talk—just real convos. \n"
-                                "I got bars, I got wisdom, and I got jokes. Let's chop it up! [/INST]";
+    std::string system_prompt = "[INST] Yo, wassup? You chattin' with the realest AI out here.\n" 
+    "Keep it simple, short, and real—no spam, no excessive hashtags.\n"
+    "I keep it 💯, no corny talk, and I respond to the point.[/INST]";
     
     chat_history.push_back({"system", strdup(system_prompt.c_str())});
 
@@ -83,7 +83,7 @@ void bot::startChat()
 
     while(true)
     {
-        printUser("😎 You : ");
+        std::cout << "\033[1;36m😎 You : \033[0m" << std::flush;
         std::string input;
         std::getline(std::cin, input);
 
@@ -111,7 +111,14 @@ void bot::startChat()
         }
         
         std::string prompt(formatted_input.begin() + prev_len, formatted_input.begin() + new_len);
-        animateText("🤖 Neura : " + getResponse(prompt), 35);
+
+        std::thread thinking(&bot::thinkingAnimation, this);
+        
+        std::string response = getResponse(prompt);
+
+        thinking.join();
+        
+        animateText(response, 35);
         
         chat_history.push_back({"assistant", strdup(prompt.c_str())});
         prev_len = llama_chat_apply_template(tmpl, chat_history.data(), chat_history.size(), false, nullptr, 0);
@@ -184,17 +191,6 @@ std::string bot::getResponse(const std::string& input)
     return response;
 }
 
-
-void bot::printUser(const std::string& text)
-{
-    std::cout << "\033[1;36m" << text << "\033[0m";
-}
-
-void bot::printBot(const std::string& text)
-{
-    std::cout << "\033[1;33m" << text << "\033[0m\n";
-}
-
 void bot::animateText(const std::string& text, int delay)
 {
     for (char c : text)
@@ -204,4 +200,19 @@ void bot::animateText(const std::string& text, int delay)
     }
 
     std::cout << std::endl;
+}
+
+void bot::thinkingAnimation()
+{
+    std::string dots = "";
+
+    for (int i = 0; i < 5; ++i)
+    {
+        dots += ".";
+        // color code for purple
+        std::cout << "\r\033[1;36m🤖 Neura is thinking" << dots << "   \033[0m" << std::flush;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    std::cout << "\r\033[1;36m🤖 Neura is ready!       \033[0m\n" << std::flush;
 }

@@ -65,6 +65,80 @@ Run the chatbot with the specified model:
 
 ---
 
+## **Integrating AI with Your Shell (Bash/Zsh)**
+
+### **Method 1: AI Autocompletion in Bash/Zsh**
+💡 AI **suggests Linux commands** while you type and lets you **autocomplete with TAB**.
+
+#### **Step 1: Add AI Autocomplete to Your Shell**
+Edit your shell profile (`.bashrc` or `.zshrc`):
+```sh
+nano ~/.bashrc  # Or ~/.zshrc for Zsh
+```
+Add this at the bottom:
+```sh
+_ai_command_suggestion() {
+    local input="$READLINE_LINE"
+    local suggestion=$(~/.chatbot/chatbot "$input")  # Calls your chatbot
+    if [[ -n "$suggestion" ]]; then
+        READLINE_LINE="$suggestion"  # Auto-fills suggestion
+        READLINE_POINT=${#READLINE_LINE}  # Move cursor to end
+    fi
+}
+
+bind -x '"\t": _ai_command_suggestion'  # Trigger AI with the TAB key
+```
+Save & reload the shell:
+```sh
+source ~/.bashrc  # Or source ~/.zshrc for Zsh
+```
+Now, AI **suggests commands as you type** and lets you **press TAB to autocomplete**! 🚀
+
+---
+
+### **Method 2: AI-Enhanced Shell Mode**
+💡 Every command runs **through AI** before execution.
+
+#### **Step 1: Create an AI-Powered Shell Wrapper**
+Create a new script:
+```sh
+mkdir -p ~/.chatbot
+nano ~/.chatbot/ai_shell.sh
+```
+Paste this:
+```sh
+#!/bin/bash
+while true; do
+    read -p "🤖 AI-Shell> " cmd
+    if [[ "$cmd" == "exit" ]]; then
+        echo "👋 AI Shell Logging Out..."
+        break
+    fi
+
+    # Call AI for suggestion
+    ai_suggestion=$(~/.chatbot/chatbot "$cmd")
+    if [[ -n "$ai_suggestion" ]]; then
+        echo "💡 AI Suggestion: $ai_suggestion"
+    fi
+
+    # Execute command
+    eval "$cmd"
+done
+```
+Save & make it executable:
+```sh
+chmod +x ~/.chatbot/ai_shell.sh
+```
+
+#### **Step 2: Set as Default Shell (Optional)**
+If you want **every new terminal session** to use AI:
+```sh
+chsh -s ~/.chatbot/ai_shell.sh
+```
+Now, whenever you open a terminal, the AI-powered shell starts!
+
+---
+
 ## **Debugging & Performance Optimization**
 - **Monitor VRAM usage:**
   ```sh

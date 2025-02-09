@@ -26,10 +26,8 @@ public:
     void startChat();
     std::string getResponse(const std::string& input);
 
-    static void printUser(const std::string& message);
-    static void printBot(const std::string& message);
-
     void animateText(const std::string& text, int delay = 50);
+    void thinkingAnimation();
 };
 
 #endif // BOT_H
