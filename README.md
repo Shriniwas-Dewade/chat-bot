@@ -5,6 +5,15 @@ This is a **C++-based chatbot** powered by `llama.cpp`, utilizing **Mistral-7B**
 
 ---
 
+# AI Chatbot using Llama.cpp 🚀
+
+## 📌 Project Demo
+
+### 🔹 Chatbot Running
+![Chatbot in Action](Assets/preview.png)
+
+---
+
 ## **Installation & Setup**
 
 ### **1. Install Dependencies**
